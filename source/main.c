@@ -12,6 +12,7 @@
 #define VERSION "5.0.1"
 #define WKDIR "boot9strap"
 #define RWMINI	(payload_len)
+#define RWCHUNK	(2048*512) //2048 sectors (1 MB)
 
 u32 foffset=0x0B130000 / 0x200; //FIRM0
 //  foffset=0x0B530000 / 0x200;   FIRM1 (for experts or yolo'ers only!)
@@ -51,6 +52,7 @@ u32 remainMB=0;
 u32 System=0; //will be one of the below 2 variables
 u32 N3DS=2;
 u32 O3DS=1;
+char nand_type[80]={0};   //sd filename buffer for nand dump
 u32 firmStatus=0;
 u64 frame=0;
 
@@ -236,7 +238,7 @@ u32 handleUI(){
 	char menu[menu_size][64];
 	strcpy(menu[0],"Exit\n");
 	strcpy(menu[1],action);
-	strcpy(menu[2],"Backup NAND);
+	strcpy(menu[2],"Backup NAND");
 
 	iprintf("b9sTool %s | %ldMB free\n", VERSION, remainMB); 
 	if    (System==O3DS)iprintf("%sOLD 3DS%s\n\n", blue, white);
