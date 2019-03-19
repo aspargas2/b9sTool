@@ -15,11 +15,12 @@
 
 u32 foffset=0x0B130000 / 0x200; //FIRM0
 //  foffset=0x0B530000 / 0x200;   FIRM1 (for experts or yolo'ers only!)
-int menu_size=2;
+const int menu_size=3;
 
 //Function index________________________
 int main();
 int checkNCSD();
+void dump3dsNand();
 void xorbuff(u8 *in1, u8 *in2, u8 *out);
 void installB9S();
 u32 handleUI();
@@ -69,9 +70,9 @@ int main() {
 	vramSetBankA(VRAM_A_MAIN_BG);
 	consoleInit(&bottomScreen, 3,BgType_Text4bpp, BgSize_T_256x256, 31, 0, false, true);
 	consoleInit(&topScreen, 3,BgType_Text4bpp, BgSize_T_256x256, 31, 0, true, true);
-    consoleSelect(&topScreen); 
-	
-    iprintf("Initializing FAT... ");
+	consoleSelect(&topScreen); 
+
+	iprintf("Initializing FAT... ");
 	if (!fatInitDefault()) error(0);
 	printf("good\n");
 	iprintf("Initializing NAND... ");
@@ -109,6 +110,53 @@ int checkNCSD() {
 
 	return 0;
 }
+
+void dump3dsNand(int mode) {
+	consoleClear();
+	u32 foffset;
+	foffset=0x0;
+	
+	if(System==O3DS){
+		sizeMB=943;
+		strcpy(nand_type,"NAND_OLD3DS.BIN");
+	}else{  //System==N3DS
+		sizeMB=1240;
+		strcpy(nand_type,"NAND_NEW3DS.BIN");
+	}
+		
+	iprintf("opening boot9strap/%s\n",nand_type);
+	iprintf("hold B to cancel\n");
+
+	FILE *f = fopen(nand_type, "wb");
+	if(!f)error(1);
+
+	u32 rwTotal=sizeMB*1024*1024;
+
+	for(int i=0;i<rwTotal;i+=RWCHUNK){           //read from nand, dump to sd
+		if(nand_ReadSectors(i / 0x200 + foffset, RWCHUNK / 0x200, workbuffer) == false){
+			iprintf("nand read error\noffset: %08X\naborting...", (int)i);
+			unlink(nand_type);
+			break;
+		}
+		if(fwrite(workbuffer, 1, RWCHUNK, f) < RWCHUNK){
+			iprintf("sdmc write error\noffset: %08X\naborting...", (int)i);
+			unlink(nand_type);
+			break;
+		}
+		iprintf("progress %d/%dMBs   \r",i / 0x100000 + 1, (int)rwTotal / 0x100000);
+		scanKeys();
+		int keys = keysHeld();
+		if(keys & KEY_B){
+			iprintf("\ncanceling...");
+			unlink(nand_type);
+			break;
+		}
+	}
+
+	fclose(f);
+	iprintf("\ndone.\r");
+}
+
 
 void xorbuff(u8 *in1, u8 *in2, u8 *out){
 
@@ -185,9 +233,10 @@ u32 handleUI(){
 	char action[64];
 	sprintf(action,"Install %s\n", WKDIR);
 
-	char menu[2][64];
+	char menu[menu_size][64];
 	strcpy(menu[0],"Exit\n");
 	strcpy(menu[1],action);
+	strcpy(menu[2],"Backup NAND);
 
 	iprintf("b9sTool %s | %ldMB free\n", VERSION, remainMB); 
 	if    (System==O3DS)iprintf("%sOLD 3DS%s\n\n", blue, white);
@@ -200,7 +249,7 @@ u32 handleUI(){
 	iprintf("\n%sWARNING:%s DONT install payload\n",yellow,white);
 	iprintf("multiple times!!\n");
 	iprintf("%sWARNING:%s Only use b9sTool with\n",yellow,white);
-	iprintf("https://3ds.hacks.guide\n");
+	iprintf("https://3ds.hacks.guide or https://3ds.eiphax.tech\n");
 	iprintf("%sWARNING:%s\n",yellow,white);
 
 	if(frame % 30 < 15) iprintf("%s%s%s\n", blue,  firmwareNames, white);
@@ -214,8 +263,9 @@ u32 handleUI(){
 	else if(keypressed & KEY_UP)  menu_index--;
 	else if(keypressed & KEY_A){
 		consoleSelect(&bottomScreen);
-		if     (menu_index==0)return 0;          //break game loop and exit app
-		else if(menu_index==1)installB9S();
+		if     (menu_index==0) return 0;          //break game loop and exit app
+		else if(menu_index==1) installB9S();
+		else /* menu_index==2*/dump3dsNand();
 	}
 	if(menu_index >= menu_size)menu_index=0;     //menu index wrap around check
 	else if(menu_index < 0)    menu_index=menu_size-1;
@@ -361,8 +411,9 @@ int dumpUnlockKey(){
 }
 
 void error(int code){
-	switch(code){ //0 4 5 6 9 2 99 9 12 10
+	switch(code){ //0 4 5 6 9 2 99 9 12 10 1
 		case 0:  iprintf("Fat could not be initialized!\n"); break;
+		case 1:  iprintf("Could not open file handle!\n"); break;
 		case 2:  iprintf("Not a 3ds (or nand read error)!\n"); break;
 		case 4:  iprintf("Workbuffer(s) failed init!\n"); break;
 		case 5:  iprintf("Nand failed init!\n"); break;
