@@ -113,7 +113,7 @@ int checkNCSD() {
 	return 0;
 }
 
-void dump3dsNand(int mode) {
+void dump3dsNand() {
 	consoleClear();
 	u32 foffset;
 	foffset=0x0;
